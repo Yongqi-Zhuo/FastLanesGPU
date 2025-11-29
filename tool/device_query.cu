@@ -32,21 +32,21 @@ void deviceProperties() {
 
 		// The compute capability of the device
 		printf("Compute capability:  %d.%d\n", prop.major, prop.minor);
-		// The clock frequency, how fast the actual processors in the GPU are
-		// going
-		printf("\n");
-		printf("Clock rate:  %.0f MHz (%.0f GHz)\n", prop.clockRate * 1e-3f, prop.clockRate * 1e-6f);
+		// // The clock frequency, how fast the actual processors in the GPU are
+		// // going
+		// printf("\n");
+		// printf("Clock rate:  %.0f MHz (%.0f GHz)\n", prop.clockRate * 1e-3f, prop.clockRate * 1e-6f);
 		printf("\n");
 		// The device can concurrently copy memory and execute a kernel.
 
 		printf("Concurrent kernels:  %s \n", prop.concurrentKernels ? "Enabled" : "Disabled");
 #if CUDART_VERSION >= 5000
-		printf("Concurrent copy and kernel execution %s with %d copy engine(s)\n",
-		       (prop.deviceOverlap ? "Enabled" : "Disabled"),
-		       prop.asyncEngineCount);
+		// printf("Concurrent copy and kernel execution %s with %d copy engine(s)\n",
+		//        (prop.deviceOverlap ? "Enabled" : "Disabled"),
+		//        prop.asyncEngineCount);
 #endif
-		// Specified whether there is a run time limit on kernels
-		printf("Kernel execution timeout :  %s \n", prop.kernelExecTimeoutEnabled ? "Enabled" : "Disabled");
+		// // Specified whether there is a run time limit on kernels
+		// printf("Kernel execution timeout :  %s \n", prop.kernelExecTimeoutEnabled ? "Enabled" : "Disabled");
 		// The device can use mapped memory
 		printf("Integrated GPU sharing Host Memory: %s\n", prop.integrated ? "Enabled" : "Disabled");
 		printf("Support host page-locked memory mapping: %s\n", prop.canMapHostMemory ? "Enabled" : "NoDisabled");
@@ -54,8 +54,8 @@ void deviceProperties() {
 		printf("\n   --- Memory Information for device %d ---\n", i);
 
 #if CUDART_VERSION >= 5000
-		//  how fast the memory in the GPU is operating
-		printf("Memory Clock rate: %f Ghz\n", prop.memoryClockRate * 10e-7);
+		// //  how fast the memory in the GPU is operating
+		// printf("Memory Clock rate: %f Ghz\n", prop.memoryClockRate * 10e-7);
 		// how many bits of memory are actually being tranferred for each
 		// memory clock cycle
 		printf("Memory Bus Width:  %d-bit\n", prop.memoryBusWidth);

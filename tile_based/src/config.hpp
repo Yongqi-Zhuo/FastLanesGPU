@@ -7,6 +7,7 @@
 #ifndef FASTLANES_FILEFORMAT_CONFIG_HPP
 #define FASTLANES_FILEFORMAT_CONFIG_HPP
 
+#include <cstdint>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>

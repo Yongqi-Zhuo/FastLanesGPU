@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <thrust/detail/cstdint.h>
 
 template <int BLOCK_THREADS, int ITEMS_PER_THREAD>
 __device__ __forceinline__ void InitFlags(int (&selection_flags)[ITEMS_PER_THREAD]) {
