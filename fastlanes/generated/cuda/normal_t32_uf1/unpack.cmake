@@ -13,7 +13,7 @@ get_target_property(TARGET_COMPILE_OPTIONS cuda_normal_t32_1024_uf1_unpack COMPI
 #------------------------------------------------------------------------------------------------------
 add_executable(cuda_normal_t32_1024_uf1_unpack_test cuda_normal_t32_1024_uf1_unpack_test.cu)
 target_link_libraries(cuda_normal_t32_1024_uf1_unpack_test PRIVATE cuda_normal_t32_1024_uf1_unpack)
-target_link_libraries(cuda_normal_t32_1024_uf1_unpack_test PRIVATE gtest_main fastlanes_gpu)
+target_link_libraries(cuda_normal_t32_1024_uf1_unpack_test PRIVATE GTest::gtest_main fastlanes_gpu)
 #------------------------------------------------------------------------------------------------------
 add_executable(cuda_normal_t32_1024_uf1_unpack_bench cuda_normal_t32_1024_uf1_unpack_bench.cu)
 target_link_libraries(cuda_normal_t32_1024_uf1_unpack_bench PRIVATE cuda_normal_t32_1024_uf1_unpack fastlanes_gpu)
