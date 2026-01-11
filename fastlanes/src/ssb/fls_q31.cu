@@ -16,13 +16,15 @@
 #include <query/query_31.hpp>
 #include <stdio.h>
 
+#include "./benchmark.hpp"
+
 using namespace std;
 using namespace fastlanes::gpu;
 using namespace fastlanes;
 
 using namespace std;
 
-auto query_mtd = ssb::ssb_q31_10;
+auto query_mtd = ssb::ssb_q31_100;
 
 template <int BLOCK_THREADS, int ITEMS_PER_THREAD>
 __global__ void probe_v1(int* lo_orderdate,
@@ -387,45 +389,48 @@ void runQuery(int*                         lo_orderdate,
               int                          c_len,
               cub::CachingDeviceAllocator& g_allocator,
               int                          version) {
+	casdec::benchmark::Stream stream;
 
 	int *ht_d, *ht_c, *ht_s;
 	int  d_val_len = 19981230 - 19920101 + 1;
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_d, 2 * d_val_len * sizeof(int)));
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_s, 2 * s_len * sizeof(int)));
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_c, 2 * c_len * sizeof(int)));
-
-	CubDebugExit(cudaMemset(ht_d, 0, 2 * d_val_len * sizeof(int)));
-	CubDebugExit(cudaMemset(ht_s, 0, 2 * s_len * sizeof(int)));
-
-	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
-	build_hashtable_s<BLOCK_THREADS, ITEMS_PER_THREAD>
-	    <<<(s_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(s_region, s_suppkey, s_nation, s_len, ht_s, s_len);
-	/*CHECK_ERROR();*/
-
-	build_hashtable_c<BLOCK_THREADS, ITEMS_PER_THREAD>
-	    <<<(c_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(c_region, c_custkey, c_nation, c_len, ht_c, c_len);
-	/*CHECK_ERROR();*/
-
-	int d_val_min = 19920101;
-	build_hashtable_d<BLOCK_THREADS, ITEMS_PER_THREAD><<<(d_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(
-	    d_datekey, d_year, d_len, ht_d, d_val_len, d_val_min);
-	/*CHECK_ERROR();*/
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_d, 2 * d_val_len * sizeof(int), stream));
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_s, 2 * s_len * sizeof(int), stream));
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_c, 2 * c_len * sizeof(int), stream));
 
 	int* res;
 	int  res_size       = ((1998 - 1992 + 1) * 25 * 25);
 	int  res_array_size = res_size * 6;
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&res, res_array_size * sizeof(int)));
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&res, res_array_size * sizeof(int), stream));
 
-	CubDebugExit(cudaMemset(res, 0, res_array_size * sizeof(int)));
+	auto numTotalRuns = casdec::benchmark::getDefaultNumTotalRuns();
 
-	// Run
+	auto bench = casdec::benchmark::benchmarkKernel([&](int) {
+	CubDebugExit(cudaMemsetAsync(ht_d, 0, 2 * d_val_len * sizeof(int), stream));
+	CubDebugExit(cudaMemsetAsync(ht_s, 0, 2 * s_len * sizeof(int), stream));
+	CubDebugExit(cudaMemsetAsync(ht_c, 0, 2 * c_len * sizeof(int), stream));
+	CubDebugExit(cudaMemsetAsync(res, 0, res_array_size * sizeof(int), stream));
+
+	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
+	build_hashtable_s<BLOCK_THREADS, ITEMS_PER_THREAD>
+	    <<<(s_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(s_region, s_suppkey, s_nation, s_len, ht_s, s_len);
+	/*CHECK_ERROR();*/
+
+	build_hashtable_c<BLOCK_THREADS, ITEMS_PER_THREAD>
+	    <<<(c_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(c_region, c_custkey, c_nation, c_len, ht_c, c_len);
+	/*CHECK_ERROR();*/
+
+	int d_val_min = 19920101;
+	build_hashtable_d<BLOCK_THREADS, ITEMS_PER_THREAD><<<(d_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(
+	    d_datekey, d_year, d_len, ht_d, d_val_len, d_val_min);
+	/*CHECK_ERROR();*/
+
 	if (version == 1) {
-		probe_v1<BLOCK_THREADS, ITEMS_PER_THREAD><<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(
+		probe_v1<BLOCK_THREADS, ITEMS_PER_THREAD><<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(
 		    lo_orderdate, lo_custkey, lo_suppkey, lo_revenue, lo_len, ht_s, s_len, ht_c, c_len, ht_d, d_val_len, res);
 	} else if (version == 2) {
 		if constexpr (ITEMS_PER_THREAD == 32) {
 			probe_v2<BLOCK_THREADS, ITEMS_PER_THREAD>
-			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate,
+			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(lo_orderdate,
 			                                                                lo_custkey,
 			                                                                lo_suppkey,
 			                                                                lo_revenue,
@@ -441,7 +446,7 @@ void runQuery(int*                         lo_orderdate,
 	} else if (version == 3) {
 		if constexpr (ITEMS_PER_THREAD == 8) {
 			probe_v3<BLOCK_THREADS, ITEMS_PER_THREAD>
-			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate,
+			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(lo_orderdate,
 			                                                                lo_custkey,
 			                                                                lo_suppkey,
 			                                                                lo_revenue,
@@ -457,7 +462,7 @@ void runQuery(int*                         lo_orderdate,
 	} else if (version == 4) {
 		if constexpr (ITEMS_PER_THREAD == 8) {
 			probe_v4<BLOCK_THREADS, ITEMS_PER_THREAD>
-			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate,
+			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS, 0, stream>>>(lo_orderdate,
 			                                                                lo_custkey,
 			                                                                lo_suppkey,
 			                                                                lo_revenue,
@@ -474,6 +479,16 @@ void runQuery(int*                         lo_orderdate,
 		throw std::runtime_error("this version does not exist");
 	}
 
+	}, numTotalRuns, stream);
+
+	std::cerr << "Query time: " << bench << " ms" << std::endl;
+	auto speed = lo_len / bench * 1e3;
+	std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
+
+	CLEANUP(ht_d);
+	CLEANUP(ht_s);
+	CLEANUP(ht_c);
+
 	int* h_res = new int[res_array_size];
 	CubDebugExit(cudaMemcpy(h_res, res, res_array_size * sizeof(int), cudaMemcpyDeviceToHost));
 
@@ -487,18 +502,21 @@ void runQuery(int*                         lo_orderdate,
 		}
 	}
 
-	ASSERT_EQ(result_of_query.size(), ssb::ssb_q31_10.reuslt.size());
-	ASSERT_EQ(result_of_query, ssb::ssb_q31_10.reuslt);
+	ASSERT_EQ(result_of_query.size(), query_mtd.reuslt.size());
+	ASSERT_EQ(result_of_query, query_mtd.reuslt);
 
 	delete[] h_res;
+	CLEANUP(res);
 }
 
 /**
  * Main
  */
 int main(int argc, char* argv[]) {
-	int version = 0;
-	version     = std::stoi(argv[1]);
+	int version = 4;
+	if (argc > 1) {
+		version = std::stoi(argv[1]);
+	}
 
 	auto hard_coded     = query_mtd.ssb;
 	int* h_lo_orderdate = loadColumn<int>("lo_orderdate", LO_LEN);

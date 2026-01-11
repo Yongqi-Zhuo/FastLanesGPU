@@ -7,11 +7,11 @@
 
 using namespace std;
 
-#define SF        10
-#define BASE_PATH ""
+#define SF        100
+#define BASE_PATH "/home/yongqi/Research/casdec/CascadingDecompGPU/external/ssb/data/"
 
 #if SF == 1
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s1_columnar/"
+#define DATA_DIR BASE_PATH "s1_columnar/"
 #define LO_LEN   6001171
 #define P_LEN    200000
 #define S_LEN    2000
@@ -19,9 +19,9 @@ using namespace std;
 #define D_LEN    2556
 #elif SF == 10
 #if defined SORTED
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s10_columnar_sorted/"
+#define DATA_DIR BASE_PATH "s10_columnar_sorted/"
 #else
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s10_columnar/"
+#define DATA_DIR BASE_PATH "s10_columnar/"
 #endif
 
 #define LO_LEN 59986214
@@ -29,6 +29,13 @@ using namespace std;
 #define S_LEN  20000
 #define C_LEN  300000
 #define D_LEN  2556
+#elif SF == 100
+#define DATA_DIR BASE_PATH "s100_columnar/"
+#define LO_LEN 600038145
+#define P_LEN 1400000
+#define S_LEN 200000
+#define C_LEN 3000000
+#define D_LEN 2556
 #else // 20
 #define DATA_DIR BASE_PATH "s20_columnar/"
 #define LO_LEN   119994746
@@ -86,6 +93,9 @@ string lookup(string col_name) {
 
 	if (col_name[0] == 'l') {
 		int index = index_of(lineorder, 17, col_name);
+		if (index == -1) {
+			return "LINEORDER" + lookup(col_name.substr(sizeof("lo_") - 1));
+		}
 		return "LINEORDER" + to_string(index);
 	} else if (col_name[0] == 's') {
 		int index = index_of(supplier, 7, col_name);

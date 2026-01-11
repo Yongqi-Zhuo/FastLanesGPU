@@ -105,7 +105,8 @@ void shared_memory_bitpacking_with_aggregation() {
 		uint32_t bw = bitwidth;
 
 		uint32_t mask            = (1 << bitwidth) - 1;
-		uint64_t encoded_arr_bsz = n_tup * sizeof(int);
+		uint64_t unencoded_arr_bsz = n_tup * sizeof(int);
+		uint64_t encoded_arr_bsz = n_vec * (bitwidth * 32) * sizeof(int);
 
 		FLS_SHOW(bw)
 		uint64_t sum {0};
@@ -131,6 +132,10 @@ void shared_memory_bitpacking_with_aggregation() {
 		for (int i {0}; i < repeat; ++i) {
 			auto time = query_aggregate<32, 32>(d_encoded_arr, query_mtd, g_allocator);
 			FLS_SHOW(time)
+			auto bandwidth = encoded_arr_bsz / time / 1e6;
+			FLS_SHOW(bandwidth)
+			auto throughput = unencoded_arr_bsz / time / 1e6;
+			FLS_SHOW(throughput)
 		}
 
 

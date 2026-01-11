@@ -1,5 +1,5 @@
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
 
 /*#include <cuda.h>*/
@@ -7,23 +7,30 @@
 
 using namespace std;
 
-#define SF 10
+#define SF 100
 
-#define BASE_PATH ""
+#define BASE_PATH "/home/yongqi/Research/casdec/CascadingDecompGPU/external/ssb/data/"
 
 #if SF == 1
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s1_columnar/"
+#define DATA_DIR BASE_PATH "s1_columnar/"
 #define LO_LEN 6001171
 #define P_LEN 200000
 #define S_LEN 2000
 #define C_LEN 30000
 #define D_LEN 2556
 #elif SF == 10
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s10_columnar/"
+#define DATA_DIR BASE_PATH "s10_columnar/"
 #define LO_LEN 59986214
 #define P_LEN 800000
 #define S_LEN 20000
 #define C_LEN 300000
+#define D_LEN 2556
+#elif SF == 100
+#define DATA_DIR BASE_PATH "s100_columnar/"
+#define LO_LEN 600038145
+#define P_LEN 1400000
+#define S_LEN 200000
+#define C_LEN 3000000
 #define D_LEN 2556
 #else // 20
 #define DATA_DIR BASE_PATH "s20_columnar/"
@@ -95,13 +102,3 @@ int storeColumn(string col_name, int num_entries, int* h_col) {
   colData.write((char*)h_col, num_entries * sizeof(T));
   return 0;
 }
-
-/*int main() {*/
-  //int *h_col = new int[10];
-  //for (int i=0; i<10; i++) h_col[i] = i;
-  //storeColumn<int>("test", 10, h_col);
-  //int *l_col = loadColumn<int>("test", 10);
-  //for (int i=0; i<10; i++) cout << l_col[i] << " ";
-  //cout << endl;
-  //return 0;
-/*}*/

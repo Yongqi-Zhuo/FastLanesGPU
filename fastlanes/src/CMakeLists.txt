@@ -5,6 +5,10 @@ add_library(fastlanes_gpu
         transpose.cpp
         unrsum.cpp)
 
+function(casdec_ptxas_verbose TARGET_NAME)
+    target_compile_options(${TARGET_NAME} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+endfunction()
+
 set_property(TARGET fastlanes_gpu PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 target_include_directories(fastlanes_gpu PUBLIC include crystal crystal-opt)
 
@@ -20,14 +24,29 @@ target_link_libraries(fls_q11 PUBLIC fastlanes_gpu gtest_main)
 add_executable(fls_q21 ssb/fls_q21.cu)
 target_link_libraries(fls_q21 PUBLIC fastlanes_gpu gtest_main)
 
+add_executable(fls_q21_flat ssb/fls_q21_flat.cu)
+target_link_libraries(fls_q21_flat PUBLIC fastlanes_gpu gtest_main)
+
+casdec_ptxas_verbose(fls_q21_flat)
+
 add_executable(fls_q21_bitpacked_opt_v4 ssb/fls_q21_bitpacked_opt_v4.cu)
 target_link_libraries(fls_q21_bitpacked_opt_v4 PUBLIC fastlanes_gpu gtest_main)
 
 add_executable(fls_q31 ssb/fls_q31.cu)
 target_link_libraries(fls_q31 PUBLIC fastlanes_gpu gtest_main)
 
+add_executable(fls_q31_flat ssb/fls_q31_flat.cu)
+target_link_libraries(fls_q31_flat PUBLIC fastlanes_gpu gtest_main)
+
+casdec_ptxas_verbose(fls_q31_flat)
+
 add_executable(fls_q41 ssb/fls_q41.cu)
 target_link_libraries(fls_q41 PUBLIC fastlanes_gpu gtest_main)
+
+add_executable(fls_q41_flat ssb/fls_q41_flat.cu)
+target_link_libraries(fls_q41_flat PUBLIC fastlanes_gpu gtest_main)
+
+casdec_ptxas_verbose(fls_q41_flat)
 
 add_executable(fls_q31_bitpacked_opt_v5 ssb/fls_q31_bitpacked_opt_v5.cu)
 target_link_libraries(fls_q31_bitpacked_opt_v5 PUBLIC fastlanes_gpu gtest_main)

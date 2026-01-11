@@ -36,6 +36,8 @@
 #include "gpu_utils.h"
 #include "ssb_utils.h"
 
+#include "./benchmark.hpp"
+
 using namespace std;
 
 /**
@@ -108,44 +110,43 @@ __global__ void QueryKernel(int *lo_orderdate, int *lo_discount,
 
 float runQuery(int *lo_orderdate, int *lo_discount, int *lo_quantity,
                int *lo_extendedprice, int lo_num_entries,
-               cub::CachingDeviceAllocator &g_allocator) {
-  SETUP_TIMING();
+               cub::CachingDeviceAllocator &g_allocator, cudaStream_t stream) {
+  // SETUP_TIMING();
 
-  float time_query;
-  chrono::high_resolution_clock::time_point st, finish;
-  st = chrono::high_resolution_clock::now();
+  // float time_query;
+  // chrono::high_resolution_clock::time_point st, finish;
+  // st = chrono::high_resolution_clock::now();
 
-  cudaEventRecord(start, 0);
+  // cudaEventRecord(start, 0);
 
   unsigned long long *d_sum = NULL;
-  CubDebugExit(g_allocator.DeviceAllocate((void **)&d_sum, sizeof(long long)));
-
-  cudaMemset(d_sum, 0, sizeof(long long));
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&d_sum, sizeof(long long), stream));
+	cudaMemsetAsync(d_sum, 0, sizeof(long long), stream);
 
   // Run
   int tile_items = 128 * 4;
   int num_blocks = (lo_num_entries + tile_items - 1) / tile_items;
-  QueryKernel<128, 4><<<num_blocks, 128>>>(lo_orderdate, lo_discount,
+  QueryKernel<128, 4><<<num_blocks, 128, 0, stream>>>(lo_orderdate, lo_discount,
                                            lo_quantity, lo_extendedprice,
                                            lo_num_entries, d_sum);
 
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&time_query, start, stop);
+  // cudaEventRecord(stop, 0);
+  // cudaEventSynchronize(stop);
+  // cudaEventElapsedTime(&time_query, start, stop);
 
   unsigned long long revenue;
   CubDebugExit(
       cudaMemcpy(&revenue, d_sum, sizeof(long long), cudaMemcpyDeviceToHost));
 
-  finish = chrono::high_resolution_clock::now();
-  std::chrono::duration<double> diff = finish - st;
+  // finish = chrono::high_resolution_clock::now();
+  // std::chrono::duration<double> diff = finish - st;
 
-  cout << "Revenue: " << revenue << endl;
-  cout << "Time Taken Total: " << diff.count() * 1000 << endl;
+  // cout << "Revenue: " << revenue << endl;
+  // cout << "Time Taken Total: " << diff.count() * 1000 << endl;
 
   CLEANUP(d_sum);
 
-  return time_query;
+  return 0;
 }
 
 /**
@@ -191,14 +192,27 @@ int main(int argc, char **argv) {
 
   cout << "** LOADED DATA TO GPU **" << endl;
 
-  for (int t = 0; t < num_trials; t++) {
-    float time_query;
-    time_query = runQuery(d_lo_orderdate, d_lo_discount, d_lo_quantity,
-                          d_lo_extendedprice, LO_LEN, g_allocator);
-    cout << "{"
-         << "\"query\":11"
-         << ",\"time_query\":" << time_query << "}" << endl;
-  }
+  casdec::benchmark::Stream stream;
+
+  auto numTotalRuns = casdec::benchmark::getDefaultNumTotalRuns();
+
+  auto bench = casdec::benchmark::benchmarkKernel([&](unsigned n) {
+    runQuery(d_lo_orderdate, d_lo_discount, d_lo_quantity,
+                          d_lo_extendedprice, LO_LEN, g_allocator, stream);
+  }, numTotalRuns, stream);
+
+  std::cerr << "Query time: " << bench << " ms" << std::endl;
+  auto speed = LO_LEN / bench * 1e3;
+  std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
+
+  // for (int t = 0; t < num_trials; t++) {
+  //   float time_query;
+  //   time_query = runQuery(d_lo_orderdate, d_lo_discount, d_lo_quantity,
+  //                         d_lo_extendedprice, LO_LEN, g_allocator, stream);
+  //   cout << "{"
+  //        << "\"query\":11"
+  //        << ",\"time_query\":" << time_query << "}" << endl;
+  // }
 
   return 0;
 }

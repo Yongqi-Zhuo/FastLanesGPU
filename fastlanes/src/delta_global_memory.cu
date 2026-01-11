@@ -103,7 +103,6 @@ void shared_memory_delta_with_aggregation() {
 	auto*          h_transposed_arr = new uint32_t[vec_sz];
 	auto*          h_unrsummed_arr  = new uint32_t[vec_sz];
 	auto*          h_base_arr       = new uint32_t[n_base];
-	uint64_t       encoded_arr_bsz  = n_tup * sizeof(int);
 	uint32_t*      d_base_arr       = nullptr;
 	uint32_t*      d_encoded_arr    = nullptr;
 
@@ -138,6 +137,18 @@ void shared_memory_delta_with_aggregation() {
 			base_als = base_als + 32;
 		}
 
+		uint64_t unencoded_arr_bsz = n_tup * sizeof(int);
+		uint64_t encoded_arr_bsz = n_vec * (bitwidth * 32) * sizeof(int);
+		uint64_t base_arr_bsz    = 32 * n_vec * sizeof(uint32_t);
+		uint64_t compressed_bsz = encoded_arr_bsz + base_arr_bsz;
+
+		FLS_SHOW(compressed_bsz)
+
+		double compression_rate = (double)compressed_bsz / (double)unencoded_arr_bsz;
+		double compression_ratio = (double)unencoded_arr_bsz / (double)compressed_bsz;
+		FLS_SHOW(compression_rate)
+		FLS_SHOW(compression_ratio)
+
 		d_encoded_arr = load_to_gpu(h_encoded_data, encoded_arr_bsz, g_allocator);
 		d_base_arr    = load_to_gpu(h_base_arr, 32 * n_vec * sizeof(uint32_t), g_allocator);
 
@@ -147,6 +158,10 @@ void shared_memory_delta_with_aggregation() {
 		for (int i {0}; i < repeat; ++i) {
 			auto time = decode<32, 32>(h_org_arr, h_decoed_arr, d_base_arr, d_encoded_arr, query_mtd, g_allocator);
 			FLS_SHOW(time)
+			auto bandwidth = (compressed_bsz + unencoded_arr_bsz) / time / 1e6;
+			FLS_SHOW(bandwidth)
+			auto throughput = unencoded_arr_bsz / time / 1e6;
+			FLS_SHOW(throughput)
 		}
 
 		CLEANUP(d_encoded_arr)

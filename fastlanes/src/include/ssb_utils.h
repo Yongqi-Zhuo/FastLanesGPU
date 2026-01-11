@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <common.cuh>
 #include <fstream>
 #include <memory>
@@ -31,9 +32,73 @@ using namespace std;
 
 namespace fastlanes::ssb {
 
-#define SF 10
+#define SF 100
 
-#if SF == 10
+#if SF == 100
+class SSB {
+public:
+	const uint64_t n_tup_line_order;
+	const string   name;
+	const Dir      dir;
+
+	static constexpr int32_t lo_orderdate_min = 19920101;
+	static constexpr int32_t lo_orderdate_max = 19980802;
+	static constexpr uint8_t lo_orderdate_bw  = 16;
+
+	static constexpr int32_t lo_extendedprice_min = 90100;
+	static constexpr int32_t lo_extendedprice_max = 10494950;
+	static constexpr uint8_t lo_extendedprice_bw  = 24;
+
+	static constexpr int32_t lo_quantity_min = 1;
+	static constexpr int32_t lo_quantity_max = 50;
+	static constexpr uint8_t lo_quantity_bw  = 6;
+
+	static constexpr int32_t lo_discount_min = 1;
+	static constexpr int32_t lo_discount_max = 10;
+	static constexpr uint8_t lo_discount_bw  = 4;
+
+	static constexpr int32_t lo_partkey_min = 1;
+	static constexpr int32_t lo_partkey_max = 1000000;
+	static constexpr uint8_t lo_partkey_bw  = 20;
+
+	static constexpr int32_t lo_suppkey_min       = 1;
+	static constexpr int32_t lo_suppkey_max       = 200000;
+	static constexpr uint8_t lo_real_suppkey_bw   = 18;
+	static constexpr uint8_t lo_chosen_suppkey_bw = 20;
+
+	static constexpr int32_t lo_revenue_min = 81360;
+	static constexpr int32_t lo_revenue_max = 10494950;
+	static constexpr uint8_t lo_revenue_bw  = 24;
+
+	static constexpr int32_t lo_custkey_min       = 1;
+	static constexpr int32_t lo_custkey_max       = 3000000;
+	static constexpr uint8_t lo_real_custkey_bw   = 22;
+	static constexpr uint8_t lo_chosen_custkey_bw = 24;
+
+	static constexpr int32_t lo_supplycost_min       = 54060;
+	static constexpr int32_t lo_supplycost_max       = 125939;
+	static constexpr uint8_t lo_supplycost_bw        = 17;
+	static constexpr uint8_t lo_chosen_supplycost_bw = 20;
+
+	static constexpr uint8_t lo_s_real_nation_bw = 5;
+	static constexpr uint8_t lo_s_chosen_nation_bw = 8;
+
+	static constexpr uint8_t lo_s_real_region_bw = 3;
+	static constexpr uint8_t lo_s_chosen_region_bw = 4;
+
+	static constexpr uint8_t lo_c_real_region_bw = 3;
+	static constexpr uint8_t lo_c_chosen_region_bw = 4;
+
+	static constexpr uint8_t lo_p_real_category_bw = 5;
+	static constexpr uint8_t lo_p_chosen_category_bw = 8;
+
+	static constexpr uint8_t lo_p_real_mfgr_bw = 3;
+	static constexpr uint8_t lo_p_chosen_mfgr_bw = 4;
+
+	int32_t n_vec;
+};
+
+#elif SF == 10
 class SSB {
 public:
 	const uint64_t n_tup_line_order;
@@ -169,6 +234,7 @@ inline Dir         supplier_dir {3, table_path + "supplier.tbl"};
 inline SSB ssb_0_1 {600597, "SF_0_1", sample_data::ssb_0_1::lineorder_dir, 587};
 inline SSB ssb_1 {6001171, "SF_1", sample_data::ssb_1::lineorder_dir, 5861};
 inline SSB ssb_10 {59986214, "SF_10", sample_data::ssb_10::lineorder_dir, 58581};
+inline SSB ssb_100 {600038145, "SF_100", sample_data::ssb_10::lineorder_dir, 585975};
 
 struct SSBQuery1 {
 	const uint64_t result;
@@ -177,6 +243,7 @@ struct SSBQuery1 {
 
 inline SSBQuery1 ssb_q11_0_1 {41307262627, ssb_0_1};
 inline SSBQuery1 ssb_q11_10 {4468236714181, ssb_10};
+inline SSBQuery1 ssb_q11_100 {44683458181724, ssb_100};
 
 inline SSBQuery1 ssb_q11_1 {446268068091, ssb_1};
 inline SSBQuery1 ssb_q12_1 {98314553869, ssb_1};

@@ -11,6 +11,8 @@
 #include <iostream>
 #include <stdio.h>
 
+#include "benchmark.hpp"
+
 using namespace std;
 using namespace fastlanes::gpu;
 using namespace fastlanes;
@@ -85,54 +87,54 @@ float query(int*                         lo_orderdate,
             int*                         lo_quantity,
             int*                         lo_extendedprice,
             ssb::SSBQuery1             query_mtd,
-            cub::CachingDeviceAllocator& g_allocator) {
-	SETUP_TIMING();
+            cub::CachingDeviceAllocator& g_allocator, cudaStream_t stream) {
+	// SETUP_TIMING();
 
-	float                                     time_query;
-	chrono::high_resolution_clock::time_point st, finish;
-	st = chrono::high_resolution_clock::now();
+	// float                                     time_query;
+	// chrono::high_resolution_clock::time_point st, finish;
+	// st = chrono::high_resolution_clock::now();
 
-	cudaEventRecord(start, 0);
+	// cudaEventRecord(start, 0);
 
 	unsigned long long* d_sum = NULL;
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&d_sum, sizeof(long long)));
-
-	cudaMemset(d_sum, 0, sizeof(long long));
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&d_sum, sizeof(long long), stream));
+	cudaMemsetAsync(d_sum, 0, sizeof(long long), stream);
 
 	// Run
 	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
 	int num_blocks = (query_mtd.ssb.n_tup_line_order + tile_items - 1) / tile_items;
 	QueryKernel<BLOCK_THREADS, ITEMS_PER_THREAD>
-	    <<<num_blocks, BLOCK_THREADS>>>(lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
+	    <<<num_blocks, BLOCK_THREADS, 0, stream>>>(lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
 
-	cudaEventRecord(stop, 0);
-	cudaEventSynchronize(stop);
-	cudaEventElapsedTime(&time_query, start, stop);
+	// cudaEventRecord(stop, 0);
+	// cudaEventSynchronize(stop);
+	// cudaEventElapsedTime(&time_query, start, stop);
 
-	unsigned long long revenue;
-	CubDebugExit(cudaMemcpy(&revenue, d_sum, sizeof(long long), cudaMemcpyDeviceToHost));
+	// unsigned long long revenue;
+	// CubDebugExit(cudaMemcpy(&revenue, d_sum, sizeof(long long), cudaMemcpyDeviceToHost));
 
-	finish                             = chrono::high_resolution_clock::now();
-	std::chrono::duration<double> diff = finish - st;
+	// finish                             = chrono::high_resolution_clock::now();
+	// std::chrono::duration<double> diff = finish - st;
 
-	double total_time_taken {diff.count() * 1000};
-	FLS_SHOW(total_time_taken)
+	// double total_time_taken {diff.count() * 1000};
+	// FLS_SHOW(total_time_taken)
 
-	/*Check the result*/
-	FLS_SHOW(revenue)
-	if (revenue != query_mtd.result) { throw std::runtime_error("RESULT INCOREECT!"); }
-	FLS_SUCCESS(query_mtd.ssb.name)
+	// /*Check the result*/
+	// FLS_SHOW(revenue)
+	// if (revenue != query_mtd.result) { throw std::runtime_error("RESULT INCOREECT!"); }
+	// FLS_SUCCESS(query_mtd.ssb.name)
 
 	CLEANUP(d_sum);
 
-	return time_query;
+	// return time_query;
+	return 0;
 }
 
 int main() {
 	int  num_trials  = 3;
 	auto queries_mtd = {
 	    //
-	    ssb::ssb_q11_10,
+	    ssb::ssb_q11_100,
 	    //
 	};
 	for (const auto query_mtd : queries_mtd) {
@@ -184,11 +186,26 @@ int main() {
 
 		FLS_LOG("LOADED DATA TO GPU")
 
-		for (int n = 0; n < num_trials; n++) {
-			auto t =
-			    query<32, 32>(d_lo_orderdate, d_lo_discount, d_lo_quantity, d_lo_extendedprice, query_mtd, g_allocator);
-			FLS_RESULT(t)
-		}
+		casdec::benchmark::Stream stream;
+
+		auto numTotalRuns = casdec::benchmark::getDefaultNumTotalRuns();
+
+		auto bench = casdec::benchmark::benchmarkKernel([&](unsigned n) {
+			query<32, 32>(d_lo_orderdate, d_lo_discount, d_lo_quantity, d_lo_extendedprice, query_mtd, g_allocator, stream);
+		}, numTotalRuns, stream);
+
+		std::cerr << "Query time: " << bench << " ms" << std::endl;
+		auto speed = LO_LEN / bench * 1e3;
+		std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
+
+		// for (int n = 0; n < num_trials; n++) {
+		// 	auto t =
+		// 	    query<32, 32>(d_lo_orderdate, d_lo_discount, d_lo_quantity, d_lo_extendedprice, query_mtd, g_allocator, stream);
+		// 	// t in ms
+		// 	FLS_SHOW(t)
+		// 	float speed = (float)LO_LEN / (t / 1000);
+		// 	FLS_SHOW(speed)
+		// }
 	}
 	return 0;
 }
