@@ -10,6 +10,7 @@
 #include <fls_gen/pack/pack.hpp>
 #include <iostream>
 #include <stdio.h>
+#include <filesystem>
 
 #include "benchmark.hpp"
 
@@ -151,9 +152,12 @@ int main() {
 			tmp[i] = h_lo_orderdate[i] - hard_coded.lo_orderdate_min;
 		}
 
-		const int* h_enc_lo_orderdate = new int[n_vec * 1024];
-		const int* h_enc_lo_discount  = new int[n_vec * 1024];
-		const int* h_enc_lo_quantity  = new int[n_vec * 1024];
+		const int* h_enc_lo_orderdate;
+		cudaMallocHost(&h_enc_lo_orderdate, sizeof(int) * n_vec * 1024);
+		const int* h_enc_lo_discount;
+		cudaMallocHost(&h_enc_lo_discount, sizeof(int) * n_vec * 1024);
+		const int* h_enc_lo_quantity;
+		cudaMallocHost(&h_enc_lo_quantity, sizeof(int) * n_vec * 1024);
 
 		auto* orderdate_in = const_cast<const int32_t*>(tmp);
 		auto* discount_in  = const_cast<int32_t*>(h_lo_discount);
@@ -179,9 +183,9 @@ int main() {
 
 		FLS_LOG("LOADED DATA")
 
-		int* d_lo_orderdate     = loadToGPU<int32_t>(h_enc_lo_orderdate, hard_coded.n_tup_line_order, g_allocator);
-		int* d_lo_discount      = loadToGPU<int32_t>(h_enc_lo_discount, hard_coded.n_tup_line_order, g_allocator);
-		int* d_lo_quantity      = loadToGPU<int32_t>(h_enc_lo_quantity, hard_coded.n_tup_line_order, g_allocator);
+		int* d_lo_orderdate     = loadToGPU<int32_t>(h_enc_lo_orderdate, orderdate_out - h_enc_lo_orderdate, g_allocator);
+		int* d_lo_discount      = loadToGPU<int32_t>(h_enc_lo_discount, discount_out - h_enc_lo_discount, g_allocator);
+		int* d_lo_quantity      = loadToGPU<int32_t>(h_enc_lo_quantity, quantity_out - h_enc_lo_quantity, g_allocator);
 		int* d_lo_extendedprice = loadToGPU<int32_t>(h_lo_extendedprice, hard_coded.n_tup_line_order, g_allocator);
 
 		FLS_LOG("LOADED DATA TO GPU")
@@ -197,6 +201,32 @@ int main() {
 		std::cerr << "Query time: " << bench << " ms" << std::endl;
 		auto speed = LO_LEN / bench * 1e3;
 		std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
+
+		auto benchH2D = casdec::benchmark::benchmarkKernel(
+		    [&](void) {
+			    loadToGPUBuffer<int32_t>(h_enc_lo_orderdate, orderdate_out - h_enc_lo_orderdate, d_lo_orderdate, stream);
+			    loadToGPUBuffer<int32_t>(h_enc_lo_discount, discount_out - h_enc_lo_discount, d_lo_discount, stream);
+			    loadToGPUBuffer<int32_t>(h_enc_lo_quantity, quantity_out - h_enc_lo_quantity, d_lo_quantity, stream);
+			    loadToGPUBuffer<int32_t>(h_lo_extendedprice, hard_coded.n_tup_line_order, d_lo_extendedprice, stream);
+		    },
+		    numTotalRuns, stream);
+		auto speedH2D = hard_coded.n_tup_line_order / benchH2D * 1e3;
+		auto bandwidthH2D = (orderdate_out - h_enc_lo_orderdate +
+		                     discount_out - h_enc_lo_discount +
+		                     quantity_out - h_enc_lo_quantity +
+		                     hard_coded.n_tup_line_order) *
+		                    sizeof(int) / benchH2D / 1e6;
+		std::cerr << "H2D time: " << benchH2D << " ms" << std::endl;
+		std::cerr << "H2D speed: " << speedH2D << " rows/s" << std::endl;
+		std::cerr << "H2D bandwidth: " << bandwidthH2D << " GB/s" << std::endl;
+
+		{
+			auto path = std::filesystem::path(DATA_DIR "benchmark/fastlanes_gpu/q11.txt");
+			std::filesystem::create_directories(path.parent_path());
+			auto file = std::ofstream(path);
+			file << "time,speed,h2d_time,h2d_speed,h2d_bandwidth\n";
+			file << bench.average << "," << speed.average << "," << benchH2D.average << "," << speedH2D.average << "," << bandwidthH2D.average << "\n";
+		}
 
 		// for (int n = 0; n < num_trials; n++) {
 		// 	auto t =

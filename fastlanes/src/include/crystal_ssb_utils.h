@@ -116,7 +116,8 @@ string lookup(string col_name) {
 
 template <typename T>
 T* loadColumn(string col_name, int num_entries) {
-	T*       h_col    = new T[num_entries];
+	T* h_col;
+	cudaMallocHost(&h_col, sizeof(T) * num_entries);
 	string   filename = DATA_DIR + lookup(col_name);
 	ifstream colData(filename.c_str(), ios::in | ios::binary);
 	if (!colData) { throw std::runtime_error(filename.c_str()); }

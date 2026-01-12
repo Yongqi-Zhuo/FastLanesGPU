@@ -26,6 +26,7 @@
 #include <curand.h>
 #include <iostream>
 #include <stdio.h>
+#include <filesystem>
 
 #include "cub/test/test_util.h"
 #include <cub/util_allocator.cuh>
@@ -264,6 +265,14 @@ float runQuery(int *lo_orderdate, int *lo_custkey, int *lo_suppkey,
   auto speed = static_cast<double>(lo_len) / bench * 1e3;
   std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
 
+	{
+		auto path = std::filesystem::path(DATA_DIR "benchmark/crystal_opt/q31.txt");
+		std::filesystem::create_directories(path.parent_path());
+		auto file = std::ofstream(path);
+		file << "time,speed,h2d_time,h2d_speed,h2d_bandwidth\n";
+		file << bench.average << "," << speed.average << ",";
+	}
+
   int *h_res = new int[res_array_size];
   CubDebugExit(cudaMemcpy(h_res, res, res_array_size * sizeof(int),
                           cudaMemcpyDeviceToHost));
@@ -351,6 +360,35 @@ int main(int argc, char **argv) {
   runQuery(d_lo_orderdate, d_lo_custkey, d_lo_suppkey, d_lo_revenue, LO_LEN,
            d_d_datekey, d_d_year, D_LEN, d_s_suppkey, d_s_region, d_s_nation,
            S_LEN, d_c_custkey, d_c_region, d_c_nation, C_LEN, g_allocator);
+
+	auto stream = casdec::benchmark::Stream();
+	auto benchH2D = casdec::benchmark::benchmarkKernel(
+		[&] {
+      loadToGPUBuffer<int>(h_lo_orderdate, LO_LEN, d_lo_orderdate, stream);
+      loadToGPUBuffer<int>(h_lo_custkey, LO_LEN, d_lo_custkey, stream);
+      loadToGPUBuffer<int>(h_lo_suppkey, LO_LEN, d_lo_suppkey, stream);
+      loadToGPUBuffer<int>(h_lo_revenue, LO_LEN, d_lo_revenue, stream);
+      loadToGPUBuffer<int>(h_d_datekey, D_LEN, d_d_datekey, stream);
+      loadToGPUBuffer<int>(h_d_year, D_LEN, d_d_year, stream);
+      loadToGPUBuffer<int>(h_s_suppkey, S_LEN, d_s_suppkey, stream);
+      loadToGPUBuffer<int>(h_s_region, S_LEN, d_s_region, stream);
+      loadToGPUBuffer<int>(h_s_nation, S_LEN, d_s_nation, stream);
+      loadToGPUBuffer<int>(h_c_custkey, C_LEN, d_c_custkey, stream);
+      loadToGPUBuffer<int>(h_c_region, C_LEN, d_c_region, stream);
+      loadToGPUBuffer<int>(h_c_nation, C_LEN, d_c_nation, stream);
+		},
+		casdec::benchmark::getDefaultNumTotalRuns(), stream);
+	auto speedH2D = LO_LEN / benchH2D * 1e3;
+	auto bandwidthH2D = ((size_t)LO_LEN * 4 + (size_t)D_LEN * 2 + (size_t)S_LEN * 3 + (size_t)C_LEN * 3) * sizeof(int32_t) / benchH2D / 1e6;
+	std::cerr << "H2D time: " << benchH2D << " ms" << std::endl;
+	std::cerr << "H2D speed: " << speedH2D << " rows/s" << std::endl;
+	std::cerr << "H2D bandwidth: " << bandwidthH2D << " GB/s" << std::endl;
+
+	{
+		auto path = std::filesystem::path(DATA_DIR "benchmark/crystal_opt/q31.txt");
+		auto file = std::ofstream(path, std::ios::app);
+		file << benchH2D.average << "," << speedH2D.average << "," << bandwidthH2D.average << "\n";
+	}
 
   return 0;
 }

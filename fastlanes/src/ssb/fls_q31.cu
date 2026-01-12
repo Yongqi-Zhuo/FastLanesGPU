@@ -15,6 +15,7 @@
 #include <iostream>
 #include <query/query_31.hpp>
 #include <stdio.h>
+#include <filesystem>
 
 #include "./benchmark.hpp"
 
@@ -485,6 +486,14 @@ void runQuery(int*                         lo_orderdate,
 	auto speed = lo_len / bench * 1e3;
 	std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
 
+	{
+		auto path = std::filesystem::path(DATA_DIR "benchmark/fastlanes_gpu/q31.txt");
+		std::filesystem::create_directories(path.parent_path());
+		auto file = std::ofstream(path);
+		file << "time,speed,h2d_time,h2d_speed,h2d_bandwidth\n";
+		file << bench.average << "," << speed.average << ",";
+	}
+
 	CLEANUP(ht_d);
 	CLEANUP(ht_s);
 	CLEANUP(ht_c);
@@ -531,20 +540,20 @@ int main(int argc, char* argv[]) {
 		tmp[i] = h_lo_orderdate[i] - hard_coded.lo_orderdate_min;
 	}
 
-	const int* h_enc_lo_orderdate = new int[n_vec * 1024];
-	const int* h_enc_lo_custkey   = new int[n_vec * 1024];
-	const int* h_enc_lo_suppkey   = new int[n_vec * 1024];
-	const int* h_enc_lo_revenue   = new int[n_vec * 1024];
+	const int* h_enc_lo_orderdate;
+	cudaMallocHost(&h_enc_lo_orderdate, n_vec * 1024 * sizeof(int));
+	const int* h_enc_lo_custkey;
+	cudaMallocHost(&h_enc_lo_custkey, n_vec * 1024 * sizeof(int));
+	const int* h_enc_lo_suppkey;
+	cudaMallocHost(&h_enc_lo_suppkey, n_vec * 1024 * sizeof(int));
 
 	auto* orderdate_in = const_cast<const int32_t*>(tmp);
 	auto* custkey_in   = const_cast<int32_t*>(h_lo_custkey);
 	auto* suppkey_in   = const_cast<int32_t*>(h_lo_suppkey);
-	auto* revenue_in   = const_cast<int32_t*>(h_lo_revenue);
 
 	auto* orderdate_out = const_cast<int32_t*>(h_enc_lo_orderdate);
 	auto* custkey_out   = const_cast<int32_t*>(h_enc_lo_custkey);
 	auto* suppkey_out   = const_cast<int32_t*>(h_enc_lo_suppkey);
-	auto* revenue_out   = const_cast<int32_t*>(h_enc_lo_revenue);
 
 	for (uint64_t vec_idx {0}; vec_idx < n_vec; vec_idx++) {
 		generated::pack::fallback::scalar::pack(orderdate_in, orderdate_out, hard_coded.lo_orderdate_bw);
@@ -558,24 +567,12 @@ int main(int argc, char* argv[]) {
 		generated::pack::fallback::scalar::pack(suppkey_in, suppkey_out, hard_coded.lo_chosen_suppkey_bw);
 		suppkey_in  = suppkey_in + 1024;
 		suppkey_out = suppkey_out + (hard_coded.lo_chosen_suppkey_bw * 32);
-
-		generated::pack::fallback::scalar::pack(revenue_in, revenue_out, hard_coded.lo_revenue_bw);
-		revenue_in  = revenue_in + 1024;
-		revenue_out = revenue_out + (hard_coded.lo_revenue_bw * 32);
 	}
 
-	int* d_lo_orderdate = loadToGPU<int32_t>(h_enc_lo_orderdate, hard_coded.n_tup_line_order, g_allocator);
-	int* d_lo_custkey   = loadToGPU<int32_t>(h_enc_lo_custkey, hard_coded.n_tup_line_order, g_allocator);
-	int* d_lo_suppkey   = loadToGPU<int32_t>(h_enc_lo_suppkey, hard_coded.n_tup_line_order, g_allocator);
-	int* d_lo_revenue;
-
-	if (version == 1 || version == 2) {
-		d_lo_revenue = loadToGPU<int32_t>(h_enc_lo_revenue, hard_coded.n_tup_line_order, g_allocator);
-	} else if (version == 3 || version == 4) {
-		d_lo_revenue = loadToGPU<int32_t>(h_lo_revenue, hard_coded.n_tup_line_order, g_allocator);
-	} else {
-		throw std::runtime_error("this version does not exist");
-	}
+	int* d_lo_orderdate = loadToGPU<int32_t>(h_enc_lo_orderdate, orderdate_out - h_enc_lo_orderdate, g_allocator);
+	int* d_lo_custkey   = loadToGPU<int32_t>(h_enc_lo_custkey, custkey_out - h_enc_lo_custkey, g_allocator);
+	int* d_lo_suppkey   = loadToGPU<int32_t>(h_enc_lo_suppkey, suppkey_out - h_enc_lo_suppkey, g_allocator);
+	int* d_lo_revenue = loadToGPU<int32_t>(h_lo_revenue, hard_coded.n_tup_line_order, g_allocator);
 
 	int* h_d_datekey = loadColumn<int>("d_datekey", D_LEN);
 	int* h_d_year    = loadColumn<int>("d_year", D_LEN);
@@ -599,46 +596,58 @@ int main(int argc, char* argv[]) {
 	int* d_c_region  = loadToGPU<int>(h_c_region, C_LEN, g_allocator);
 	int* d_c_nation  = loadToGPU<int>(h_c_nation, C_LEN, g_allocator);
 
-	// Run
-	if (version == 1 || version == 2) {
-		runQuery<32, 32>(d_lo_orderdate,
-		                 d_lo_custkey,
-		                 d_lo_suppkey,
-		                 d_lo_revenue,
-		                 LO_LEN,
-		                 d_d_datekey,
-		                 d_d_year,
-		                 D_LEN,
-		                 d_s_suppkey,
-		                 d_s_region,
-		                 d_s_nation,
-		                 S_LEN,
-		                 d_c_custkey,
-		                 d_c_region,
-		                 d_c_nation,
-		                 C_LEN,
-		                 g_allocator,
-		                 version);
-	} else if (version == 3 || version == 4) {
-		runQuery<32, 8>(d_lo_orderdate,
-		                d_lo_custkey,
-		                d_lo_suppkey,
-		                d_lo_revenue,
-		                LO_LEN,
-		                d_d_datekey,
-		                d_d_year,
-		                D_LEN,
-		                d_s_suppkey,
-		                d_s_region,
-		                d_s_nation,
-		                S_LEN,
-		                d_c_custkey,
-		                d_c_region,
-		                d_c_nation,
-		                C_LEN,
-		                g_allocator,
-		                version);
-	} else {
-		throw std::runtime_error("this version does not exist");
+	runQuery<32, 8>(d_lo_orderdate,
+					d_lo_custkey,
+					d_lo_suppkey,
+					d_lo_revenue,
+					LO_LEN,
+					d_d_datekey,
+					d_d_year,
+					D_LEN,
+					d_s_suppkey,
+					d_s_region,
+					d_s_nation,
+					S_LEN,
+					d_c_custkey,
+					d_c_region,
+					d_c_nation,
+					C_LEN,
+					g_allocator,
+					version);
+
+	auto stream = casdec::benchmark::Stream();
+	auto benchH2D = casdec::benchmark::benchmarkKernel(
+		[&] {
+			loadToGPUBuffer(h_enc_lo_orderdate, orderdate_out - h_enc_lo_orderdate, d_lo_orderdate, stream);
+			loadToGPUBuffer(h_enc_lo_custkey, custkey_out - h_enc_lo_custkey, d_lo_custkey, stream);
+			loadToGPUBuffer(h_enc_lo_suppkey, suppkey_out - h_enc_lo_suppkey, d_lo_suppkey, stream);
+			loadToGPUBuffer(h_lo_revenue, hard_coded.n_tup_line_order, d_lo_revenue, stream);
+			loadToGPUBuffer(h_d_datekey, D_LEN, d_d_datekey, stream);
+			loadToGPUBuffer(h_d_year, D_LEN, d_d_year, stream);
+			loadToGPUBuffer(h_s_suppkey, S_LEN, d_s_suppkey, stream);
+			loadToGPUBuffer(h_s_region, S_LEN, d_s_region, stream);
+			loadToGPUBuffer(h_s_nation, S_LEN, d_s_nation, stream);
+			loadToGPUBuffer(h_c_custkey, C_LEN, d_c_custkey, stream);
+			loadToGPUBuffer(h_c_region, C_LEN, d_c_region, stream);
+			loadToGPUBuffer(h_c_nation, C_LEN, d_c_nation, stream);
+		},
+		casdec::benchmark::getDefaultNumTotalRuns(), stream);
+	auto speedH2D = hard_coded.n_tup_line_order / benchH2D * 1e3;
+	auto bandwidthH2D = (orderdate_out - h_enc_lo_orderdate +
+						custkey_out - h_enc_lo_custkey +
+						suppkey_out - h_enc_lo_suppkey +
+						hard_coded.n_tup_line_order +
+						D_LEN * 2 +
+						S_LEN * 3 +
+						C_LEN * 3
+						) * sizeof(int32_t) / benchH2D / 1e6;
+	std::cerr << "H2D time: " << benchH2D << " ms" << std::endl;
+	std::cerr << "H2D speed: " << speedH2D << " rows/s" << std::endl;
+	std::cerr << "H2D bandwidth: " << bandwidthH2D << " GB/s" << std::endl;
+
+	{
+		auto path = std::filesystem::path(DATA_DIR "benchmark/fastlanes_gpu/q31.txt");
+		auto file = std::ofstream(path, std::ios::app);
+		file << benchH2D.average << "," << speedH2D.average << "," << bandwidthH2D.average << "\n";
 	}
 }

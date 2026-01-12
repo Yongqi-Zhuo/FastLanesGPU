@@ -31,6 +31,11 @@ T* loadToGPU(const T* src, int numEntries, cub::CachingDeviceAllocator& g_alloca
 	return dest;
 }
 
+template <typename T>
+void loadToGPUBuffer(const T* src, int numEntries, T* dest, cudaStream_t stream) {
+	CHECK_CUDA_ERROR(cudaMemcpyAsync(dest, src, sizeof(T) * numEntries, cudaMemcpyHostToDevice, stream));
+}
+
 inline void* gpu_load(const void* src, bsz_t size, cub::CachingDeviceAllocator& g_allocator) {
 	void* dest;
 	CHECK_CUDA_ERROR(g_allocator.DeviceAllocate((void**)&dest, size));

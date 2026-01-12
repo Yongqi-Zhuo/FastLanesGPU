@@ -26,6 +26,7 @@
 #include <curand.h>
 #include <iostream>
 #include <stdio.h>
+#include <filesystem>
 
 #include "cub/test/test_util.h"
 #include <cub/util_allocator.cuh>
@@ -204,6 +205,28 @@ int main(int argc, char **argv) {
   std::cerr << "Query time: " << bench << " ms" << std::endl;
   auto speed = LO_LEN / bench * 1e3;
   std::cerr << "Processing speed: " << speed << " rows/s" << std::endl;
+
+  auto benchH2D = casdec::benchmark::benchmarkKernel([&](unsigned n) {
+    loadToGPUBuffer<int>(h_lo_orderdate, LO_LEN, d_lo_orderdate, stream);
+    loadToGPUBuffer<int>(h_lo_discount, LO_LEN, d_lo_discount, stream);
+    loadToGPUBuffer<int>(h_lo_quantity, LO_LEN, d_lo_quantity, stream);
+    loadToGPUBuffer<int>(h_lo_extendedprice, LO_LEN, d_lo_extendedprice,
+                        stream);
+  }, numTotalRuns, stream);
+  auto speedH2D = LO_LEN / benchH2D * 1e3;
+  auto bandwidthH2D = sizeof(int) * LO_LEN * 4 / benchH2D / 1e6;
+	std::cerr << "H2D time: " << benchH2D << " ms" << std::endl;
+	std::cerr << "H2D speed: " << speedH2D << " rows/s" << std::endl;
+	std::cerr << "H2D bandwidth: " << bandwidthH2D << " GB/s" << std::endl;
+
+	{
+		auto path = std::filesystem::path(DATA_DIR "benchmark/crystal_opt/q11.txt");
+    std::filesystem::create_directories(path.parent_path());
+		auto file = std::ofstream(path);
+    file << "time,speed,h2d_time,h2d_speed,h2d_bandwidth\n";
+    file << bench.average << "," << speed.average << "," << benchH2D.average
+         << "," << speedH2D.average << "," << bandwidthH2D.average << "\n";
+	}
 
   // for (int t = 0; t < num_trials; t++) {
   //   float time_query;

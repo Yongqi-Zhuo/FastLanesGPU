@@ -44,6 +44,11 @@ T* loadToGPU(T* src, int numEntries, cub::CachingDeviceAllocator& g_allocator) {
   return dest;
 }
 
+template <typename T>
+void loadToGPUBuffer(const T* src, int numEntries, T* dest, cudaStream_t stream) {
+	CubDebugExit(cudaMemcpyAsync(dest, src, sizeof(T) * numEntries, cudaMemcpyHostToDevice, stream));
+}
+
 #define TILE_SIZE (BLOCK_THREADS * ITEMS_PER_THREAD)
 
 #define CHECK_ERROR() { \
